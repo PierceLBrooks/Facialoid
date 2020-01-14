@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorPrimary">#008577</color>
+    <color name="colorPrimaryDark">#00574B</color>
+    <color name="colorAccent">#D81B60</color>
+    <color name="text_color">#000000</color>
+    <color name="calendar_day_label_color">#004400</color>
+    <color name="calendar_day_outline_color">#008800</color>
+    <color name="calendar_day_background_color">#00FF00</color>
+    <color name="renderColor">#00FFFF</color>
+</resources>

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <solid
+        android:color="@color/calendar_day_outline_color">
+
+    </solid>
+
+    <stroke
+        android:color="@color/calendar_day_background_color"
+        android:width="@dimen/spacing">
+
+    </stroke>
+
+</shape>
