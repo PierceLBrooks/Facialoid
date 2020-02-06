@@ -1,4 +1,26 @@
+apply plugin: 'com.google.protobuf'
 apply plugin: 'com.android.application'
+
+protobuf {
+    protoc {
+        artifact = 'com.google.protobuf:protoc:3.0.0'
+    }
+    plugins {
+        javalite {
+            artifact = 'com.google.protobuf:protoc-gen-javalite:3.0.0'
+        }
+    }
+    generateProtoTasks {
+        all().each { task ->
+            task.builtins {
+                remove java
+            }
+            task.plugins {
+                javalite { }
+            }
+        }
+    }
+}
 
 android {
 
@@ -11,13 +33,13 @@ android {
         versionName "1.0"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
         multiDexEnabled true
-        externalNativeBuild {
+        /*externalNativeBuild {
             cmake {
                 //arguments ""
                 cppFlags ""
                 cFlags ""
             }
-        }
+        }*/
     }
 
     compileOptions {
@@ -43,6 +65,18 @@ android {
                 abiFilters = []
                 abiFilters.addAll(ABI_FILTERS.split(';').collect{it as String})
             }
+        }
+    }
+
+    /*externalNativeBuild {
+        cmake {
+            path "CMakeLists.txt"
+        }
+    }*/
+
+    sourceSets {
+        main {
+            jniLibs.srcDirs = ["imported-lib"]
         }
     }
 }
@@ -81,6 +115,12 @@ dependencies {
     implementation 'com.android.support:multidex:1.0.3'
 
     implementation 'com.tyorikan:voice-recording-visualizer:1.0.3@aar'
+
+    implementation 'com.google.flogger:flogger:0.3.1'
+    implementation 'com.google.flogger:flogger-system-backend:0.3.1'
+    implementation 'com.google.code.findbugs:jsr305:3.0.2'
+    implementation 'com.google.guava:guava:27.0.1-android'
+    implementation 'com.google.protobuf:protobuf-lite:3.0.0'
 
     implementation fileTree(dir: 'libs', include: ['*.jar'])
 }

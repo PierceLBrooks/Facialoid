@@ -13,17 +13,25 @@ import androidx.annotation.LayoutRes;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
+import com.google.mediapipe.glutil.EglManager;
 import com.piercelbrooks.common.BasicActivity;
 import com.piercelbrooks.common.Mayor;
 import com.piercelbrooks.mlkit.common.preference.SettingsActivity;
 
 public class MainActivity extends BasicActivity<MayoralFamily> {
 
+    static {
+        System.loadLibrary("mediapipe_jni");
+        System.loadLibrary("opencv_java3");
+    }
+
     private static final String TAG = "OID-MainAct";
+
+    private EglManager manager;
 
     @Override
     protected void create() {
-
+        manager = new EglManager(null);
     }
 
     @Override
