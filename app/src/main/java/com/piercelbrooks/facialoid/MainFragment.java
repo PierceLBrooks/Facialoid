@@ -5,7 +5,6 @@ package com.piercelbrooks.facialoid;
 
 import androidx.annotation.LayoutRes;
 import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
@@ -13,25 +12,37 @@ import android.content.Context;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
+import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.Point;
-import android.hardware.Camera;
+import android.graphics.Matrix;
+import android.graphics.Paint;
+import android.graphics.SurfaceTexture;
 import android.util.Log;
+import android.util.Size;
+import android.view.SurfaceHolder;
+import android.view.SurfaceView;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.AdapterView;
-import android.widget.ArrayAdapter;
-import android.widget.CompoundButton;
-import android.widget.Spinner;
-import android.widget.Toast;
-import android.widget.ToggleButton;
 
+import com.google.firebase.ml.vision.common.FirebaseVisionImage;
 import com.google.firebase.ml.vision.common.FirebaseVisionPoint;
 import com.google.firebase.ml.vision.face.FirebaseVisionFace;
 import com.google.firebase.ml.vision.face.FirebaseVisionFaceContour;
+import com.google.mediapipe.components.CameraHelper;
+import com.google.mediapipe.components.CameraXPreviewHelper;
+import com.google.mediapipe.components.CameraXPreviewHelperListener;
+import com.google.mediapipe.components.ExternalTextureConverter;
+import com.google.mediapipe.components.FrameProcessor;
+import com.google.mediapipe.components.PermissionHelper;
+import com.google.mediapipe.components.TextureFrameConsumer;
+import com.google.mediapipe.formats.proto.LandmarkProto;
+import com.google.mediapipe.framework.PacketGetter;
+import com.google.mediapipe.framework.TextureFrame;
+import com.google.mediapipe.glutil.EglManager;
 import com.piercelbrooks.common.BasicFragment;
-import com.piercelbrooks.mlkit.common.CameraSource;
-import com.piercelbrooks.mlkit.common.CameraSourcePreview;
+import com.piercelbrooks.common.Family;
+import com.piercelbrooks.common.Governor;
+import com.piercelbrooks.common.Utilities;
 import com.piercelbrooks.mlkit.facedetection.FaceContourCenter;
 import com.piercelbrooks.mlkit.facedetection.FaceContourCenterGraphic;
 import com.piercelbrooks.mlkit.common.FrameMetadata;
@@ -41,43 +52,74 @@ import com.piercelbrooks.mlkit.facedetection.FaceContourDetectorProcessorListene
 import com.tyorikan.voicerecordingvisualizer.RecordingSampler;
 import com.tyorikan.voicerecordingvisualizer.VisualizerView;
 
-import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.IntBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-public class MainFragment extends BasicFragment<MayoralFamily> implements RecordingSampler.CalculateVolumeListener,
+public class MainFragment extends BasicFragment<MayoralFamily> implements
+        RecordingSampler.CalculateVolumeListener,
         FaceContourDetectorProcessorListener,
         ActivityCompat.OnRequestPermissionsResultCallback,
-        AdapterView.OnItemSelectedListener,
-        CompoundButton.OnCheckedChangeListener
+        TextureFrameConsumer,
+        CameraXPreviewHelperListener
 {
     private static final String TAG = "OID-MainFrag";
 
     private static final String FACE_CONTOUR = "Face Contour";
 
+    private static final String BINARY_GRAPH_NAME = "multihandtrackinggpu.binarypb";
+    private static final String INPUT_VIDEO_STREAM_NAME = "input_video";
+    private static final String OUTPUT_VIDEO_STREAM_NAME = "output_video";
+    private static final String OUTPUT_LANDMARKS_STREAM_NAME = "multi_hand_landmarks";
+    private static final CameraHelper.CameraFacing CAMERA_FACING = CameraHelper.CameraFacing.FRONT;
+
+    // Flips the camera-preview frames vertically before sending them into FrameProcessor to be
+    // processed in a MediaPipe graph, and flips the processed frames back when they are displayed.
+    // This is needed because OpenGL represents images assuming the image origin is at the bottom-left
+    // corner, whereas MediaPipe in general assumes the image origin is at top-left.
+    private static final boolean FLIP_FRAMES_VERTICALLY = true;
+
     private static final int PERMISSION_REQUESTS = 1;
 
     private static final float CENTER_RADIUS = 10.0f;
 
-    private CameraSource cameraSource;
-    private CameraSourcePreview preview;
-    private GraphicOverlay graphicOverlay;
-    private String selectedModel;
-    private String[] contourTypes;
+    // {@link SurfaceTexture} where the camera-preview frames can be accessed.
+    private SurfaceTexture previewFrameTexture;
+    // {@link SurfaceView} that displays the camera-preview frames processed by a MediaPipe graph.
+    private SurfaceView previewDisplayView;
+    
+    // Sends camera-preview frames into a MediaPipe graph for processing, and displays the processed
+    // frames onto a {@link Surface}.
+    private FrameProcessor processor;
+    // Converts the GL_TEXTURE_EXTERNAL_OES texture from Android camera into a regular texture to be
+    // consumed by {@link FrameProcessor} and the underlying MediaPipe graph.
+    private ExternalTextureConverter converter;
+
+    // Handles camera access via the {@link CameraX} Jetpack support library.
+    private CameraXPreviewHelper cameraHelper;
+
     private RecordingSampler recordingSampler;
     private VisualizerView visualizer;
+
+    private View main;
+
+    private Paint paint;
+
+    private FaceContourDetectorProcessor frames;
+
+    private GraphicOverlay overlay;
+
+    private String[] contourTypes;
 
     public MainFragment()
     {
         super();
-        selectedModel = FACE_CONTOUR;
-        cameraSource = null;
-        preview = null;
-        graphicOverlay = null;
-        contourTypes = null;
         recordingSampler = null;
         visualizer = null;
+        paint = new Paint();
+        paint.setColor(ContextCompat.getColor((MainActivity)Governor.getInstance().getCitizen(Family.MUNICIPALITY), android.R.color.white));
     }
 
     @Override
@@ -92,38 +134,66 @@ public class MainFragment extends BasicFragment<MayoralFamily> implements Record
         String[] types = getResources().getStringArray(R.array.contours);
         contourTypes = Arrays.copyOf(types, types.length);
 
-        preview = view.findViewById(R.id.firePreview);
-        if (preview == null) {
-            Log.d(TAG, "Preview is null");
-        }
-        graphicOverlay = view.findViewById(R.id.fireFaceOverlay);
-        if (graphicOverlay == null) {
-            Log.d(TAG, "graphicOverlay is null");
-        }
+        main = view;
 
-        Spinner spinner = view.findViewById(R.id.spinner);
-        List<String> options = new ArrayList<>();
-        options.add(FACE_CONTOUR);
-        // Creating adapter for spinner
-        ArrayAdapter<String> dataAdapter = new ArrayAdapter<String>((MainActivity)getMunicipality(), R.layout.spinner_style, options);
-        // Drop down layout style - list view with radio button
-        dataAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        // attaching data adapter to spinner
-        spinner.setAdapter(dataAdapter);
-        spinner.setOnItemSelectedListener(this);
+        previewDisplayView = new SurfaceView(getActivity());
+        setupPreviewDisplayView();
 
-        ToggleButton facingSwitch = view.findViewById(R.id.facingSwitch);
-        facingSwitch.setOnCheckedChangeListener(this);
-        // Hide the toggle button if there is only 1 camera
-        if (Camera.getNumberOfCameras() == 1) {
-            facingSwitch.setVisibility(View.GONE);
-        }
+        processor = new FrameProcessor(
+                        getActivity(),
+                        getManager().getNativeContext(),
+                        BINARY_GRAPH_NAME,
+                        INPUT_VIDEO_STREAM_NAME,
+                        OUTPUT_VIDEO_STREAM_NAME);
+        processor.getVideoSurfaceOutput().setFlipY(FLIP_FRAMES_VERTICALLY);
 
-        if (allPermissionsGranted()) {
-            createCameraSource(selectedModel);
-        } else {
-            getRuntimePermissions();
-        }
+        processor.addPacketCallback(
+                OUTPUT_LANDMARKS_STREAM_NAME,
+                (packet) -> {
+                    Log.d(TAG, "Received multi-hand landmarks packet.");
+                    List<LandmarkProto.NormalizedLandmarkList> multiHandLandmarks =
+                            PacketGetter.getProtoVector(packet, LandmarkProto.NormalizedLandmarkList.parser());
+                    /*
+                    Log.d(
+                            TAG,
+                            "[TS:"
+                                    + packet.getTimestamp()
+                                    + "] "
+                                    + getMultiHandLandmarksDebugString(multiHandLandmarks));
+                                    */
+
+                    if (overlay != null) {
+                        overlay.clear();
+                    }
+                    try {
+                        Canvas canvas = previewDisplayView.getHolder().lockCanvas();
+                        //canvas.drawColor(Color.BLACK);
+                        /*Matrix matrix = new Matrix();
+                        matrix.postScale(((float)canvas.getWidth())/((float)originalCameraImage.getWidth()), ((float)canvas.getHeight())/((float)originalCameraImage.getHeight()));
+                        canvas.drawBitmap(originalCameraImage, matrix, paint);*/
+                        overlay.onDraw(canvas);
+                        float width = canvas.getWidth();
+                        float height = canvas.getHeight();
+                        for (LandmarkProto.NormalizedLandmarkList landmarks : multiHandLandmarks) {
+                            for (LandmarkProto.NormalizedLandmark landmark : landmarks.getLandmarkList()) {
+                                canvas.drawCircle(landmark.getX() * width, landmark.getY() * height, 5.0f, paint);
+                            }
+                        }
+                        previewDisplayView.getHolder().unlockCanvasAndPost(canvas);
+                    } catch (Exception exception) {
+                        exception.printStackTrace();
+                    }
+                });
+
+        frames = new FaceContourDetectorProcessor(this);
+
+        converter = new ExternalTextureConverter(getManager().getContext());
+        converter.setFlipY(FLIP_FRAMES_VERTICALLY);
+        converter.setConsumer(processor);
+        converter.addConsumer(this);
+        /*if (PermissionHelper.cameraPermissionsGranted((MainActivity)Governor.getInstance().getCitizen(Family.MUNICIPALITY))) {
+            startCamera();
+        }*/
 
         visualizer = view.findViewById(R.id.visualizer);
 
@@ -131,13 +201,24 @@ public class MainFragment extends BasicFragment<MayoralFamily> implements Record
         recordingSampler.setVolumeListener(this);  // for custom implements
         recordingSampler.setSamplingInterval(100); // voice sampling interval
         recordingSampler.link(visualizer);     // link to visualizer
+
+        if (!allPermissionsGranted()) {
+            getRuntimePermissions();
+        } else {
+            startCamera();
+        }
+
+        PermissionHelper.checkAndRequestCameraPermissions(getActivity());
     }
 
     @Override
-    public void onBirth()
-    {
-        startCameraSource();
+    public void onDestroyView() {
+        super.onDestroyView();
+        converter.close();
+    }
 
+    @Override
+    public void onBirth() {
         if ((recordingSampler == null) && (visualizer != null)) {
             recordingSampler = new RecordingSampler();
             recordingSampler.setVolumeListener(this);  // for custom implements
@@ -147,12 +228,7 @@ public class MainFragment extends BasicFragment<MayoralFamily> implements Record
     }
 
     @Override
-    public void onDeath()
-    {
-        if (preview != null) {
-            preview.stop();
-        }
-
+    public void onDeath() {
         if (recordingSampler != null) {
             if (recordingSampler.isRecording()) {
                 recordingSampler.release();
@@ -161,102 +237,97 @@ public class MainFragment extends BasicFragment<MayoralFamily> implements Record
     }
 
     @Override
-    public MayoralFamily getMayoralFamily()
-    {
+    public MayoralFamily getMayoralFamily() {
         return MayoralFamily.MAIN;
     }
 
     @Override
-    public Class<?> getCitizenClass()
-    {
+    public Class<?> getCitizenClass() {
         return MainFragment.class;
     }
 
-    @Override
-    public synchronized void onItemSelected(AdapterView<?> parent, View view, int pos, long id) {
-        // An item was selected. You can retrieve the selected item using
-        // parent.getItemAtPosition(pos)
-        selectedModel = parent.getItemAtPosition(pos).toString();
-        Log.d(TAG, "Selected model: " + selectedModel);
-        preview.stop();
-        if (allPermissionsGranted()) {
-            createCameraSource(selectedModel);
-            startCameraSource();
-        } else {
-            getRuntimePermissions();
-        }
+    private void setupPreviewDisplayView() {
+        previewDisplayView.setVisibility(View.GONE);
+        ViewGroup viewGroup = main.findViewById(R.id.preview_display_layout);
+        viewGroup.addView(previewDisplayView);
+
+        previewDisplayView
+                .getHolder()
+                .addCallback(
+                        new SurfaceHolder.Callback() {
+                            @Override
+                            public void surfaceCreated(SurfaceHolder holder) {
+                                //processor.getVideoSurfaceOutput().setSurface(previewDisplayView.getHolder().getSurface());
+                            }
+
+                            @Override
+                            public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+                                // (Re-)Compute the ideal size of the camera-preview display (the area that the
+                                // camera-preview frames get rendered onto, potentially with scaling and rotation)
+                                // based on the size of the SurfaceView that contains the display.
+                                Size viewSize = new Size(width, height);
+                                Size displaySize = cameraHelper.computeDisplaySizeFromViewSize(viewSize);
+                                boolean isCameraRotated = cameraHelper.isCameraRotated();
+
+                                // Connect the converter to the camera-preview frames as its input (via
+                                // previewFrameTexture), and configure the output width and height as the computed
+                                // display size.
+                                converter.setSurfaceTextureAndAttachToGLContext(
+                                        previewFrameTexture,
+                                        isCameraRotated ? displaySize.getHeight() : displaySize.getWidth(),
+                                        isCameraRotated ? displaySize.getWidth() : displaySize.getHeight());
+                            }
+
+                            @Override
+                            public void surfaceDestroyed(SurfaceHolder holder) {
+                                //processor.getVideoSurfaceOutput().setSurface(null);
+                            }
+                        });
     }
 
-    @Override
-    public void onNothingSelected(AdapterView<?> parent) {
-        // Do nothing.
-    }
-
-    @Override
-    public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-        Log.d(TAG, "Set facing");
-        if (cameraSource != null) {
-            if (isChecked) {
-                cameraSource.setFacing(CameraSource.CAMERA_FACING_FRONT);
-            } else {
-                cameraSource.setFacing(CameraSource.CAMERA_FACING_BACK);
-            }
-        }
-        if (preview != null) {
-            preview.stop();
-        }
-        startCameraSource();
-        if (recordingSampler != null) {
-            recordingSampler.startRecording();
-        }
-    }
-
-    private void createCameraSource(String model) {
-        // If there's no existing cameraSource, create one.
-        if (cameraSource == null) {
-            cameraSource = new CameraSource((MainActivity)getMunicipality(), graphicOverlay);
-        }
-
+    private void startCamera() {
+        cameraHelper = new CameraXPreviewHelper(this);
+        cameraHelper.setOnCameraStartedListener(
+                surfaceTexture -> {
+                    Log.i(TAG, "startCamera");
+                    previewFrameTexture = surfaceTexture;
+                    // Make the display view visible to start showing the preview. This triggers the
+                    // SurfaceHolder.Callback added to (the holder of) previewDisplayView.
+                    previewDisplayView.setVisibility(View.VISIBLE);
+                });
         try {
-            switch (model) {
-                case FACE_CONTOUR:
-                    Log.i(TAG, "Using Face Contour Detector Processor");
-                    cameraSource.setMachineLearningFrameProcessor(new FaceContourDetectorProcessor(this));
-                    break;
-                default:
-                    Log.e(TAG, "Unknown model: " + model);
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "Can not create image processor: " + model, e);
-            Toast.makeText(
-                    ((MainActivity)getMunicipality()).getApplicationContext(),
-                    "Can not create image processor: " + e.getMessage(),
-                    Toast.LENGTH_LONG)
-                    .show();
+            cameraHelper.startCamera((MainActivity) Governor.getInstance().getCitizen(Family.MUNICIPALITY), CAMERA_FACING, /*surfaceTexture=*/ null);
+        } catch (Exception exception) {
+            exception.printStackTrace();
         }
     }
 
-    /**
-     * Starts or restarts the camera source, if it exists. If the camera source doesn't exist yet
-     * (e.g., because onResume was called before the camera source was created), this will be called
-     * again when the camera source is created.
-     */
-    private void startCameraSource() {
-        if (cameraSource != null) {
-            try {
-                if (preview == null) {
-                    Log.d(TAG, "resume: Preview is null");
-                }
-                if (graphicOverlay == null) {
-                    Log.d(TAG, "resume: graphOverlay is null");
-                }
-                preview.start(cameraSource, graphicOverlay);
-            } catch (IOException e) {
-                Log.e(TAG, "Unable to start camera source.", e);
-                cameraSource.release();
-                cameraSource = null;
-            }
+    private String getMultiHandLandmarksDebugString(List<LandmarkProto.NormalizedLandmarkList> multiHandLandmarks) {
+        if (multiHandLandmarks.isEmpty()) {
+            return "No hand landmarks";
         }
+        String multiHandLandmarksStr = "Number of hands detected: " + multiHandLandmarks.size() + "\n";
+        int handIndex = 0;
+        for (LandmarkProto.NormalizedLandmarkList landmarks : multiHandLandmarks) {
+            multiHandLandmarksStr +=
+                    "\t#Hand landmarks for hand[" + handIndex + "]: " + landmarks.getLandmarkCount() + "\n";
+            int landmarkIndex = 0;
+            for (LandmarkProto.NormalizedLandmark landmark : landmarks.getLandmarkList()) {
+                multiHandLandmarksStr +=
+                        "\t\tLandmark ["
+                                + landmarkIndex
+                                + "]: ("
+                                + landmark.getX()
+                                + ", "
+                                + landmark.getY()
+                                + ", "
+                                + landmark.getZ()
+                                + ")\n";
+                ++landmarkIndex;
+            }
+            ++handIndex;
+        }
+        return multiHandLandmarksStr;
     }
 
     private String[] getRequiredPermissions() {
@@ -303,7 +374,7 @@ public class MainFragment extends BasicFragment<MayoralFamily> implements Record
             int requestCode, String[] permissions, @NonNull int[] grantResults) {
         Log.i(TAG, "Permission granted!");
         if (allPermissionsGranted()) {
-            createCameraSource(selectedModel);
+            startCamera();
         }
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
     }
@@ -319,13 +390,14 @@ public class MainFragment extends BasicFragment<MayoralFamily> implements Record
     }
 
     @Override
-    public void onFrame(@Nullable Bitmap originalCameraImage,
-                        @NonNull List<FirebaseVisionFace> faces,
-                        @NonNull FrameMetadata frameMetadata,
-                        @NonNull GraphicOverlay graphicOverlay) {
+    public void onFrame(Bitmap originalCameraImage,
+                        List<FirebaseVisionFace> faces,
+                        FrameMetadata frameMetadata,
+                        GraphicOverlay graphicOverlay) {
+        //Log.i(TAG, Utilities.getIdentifier(originalCameraImage));
         ArrayList<FaceContourCenter> centers = new ArrayList<FaceContourCenter>();
-        graphicOverlay.setTranslationX((((float)((ViewGroup)graphicOverlay.getParent()).getWidth())*0.5f)-(0.5f*((float)graphicOverlay.getWidth())));
-        if (contourTypes == null) {
+        //graphicOverlay.setTranslationX((((float)((ViewGroup)graphicOverlay.getParent()).getWidth())*0.5f)-(0.5f*((float)graphicOverlay.getWidth())));
+        if ((contourTypes == null) || (overlay == null)) {
             return;
         }
         for (int i = 0; i < contourTypes.length; ++i) {
@@ -371,5 +443,43 @@ public class MainFragment extends BasicFragment<MayoralFamily> implements Record
     @Override
     public void onCalculateVolume(int volume) {
         //Log.d(TAG, String.valueOf(volume));
+    }
+
+    private EglManager getManager() {
+        return ((MainActivity) Governor.getInstance().getCitizen(Family.MUNICIPALITY)).getManager();
+    }
+
+    @Override
+    public void onNewFrame(TextureFrame frame) {
+        if (overlay == null) {
+            overlay = new GraphicOverlay(frame.getWidth(), frame.getHeight());
+        }
+    }
+
+    @Override
+    public void onNewBitmap(ByteBuffer bitmap, int width, int height) {
+        frames.process(
+                bitmap,
+                new FrameMetadata.Builder()
+                        .setWidth(width)
+                        .setHeight(height)
+                        .setRotation(cameraHelper.isCameraRotated()?1:0)
+                        .setCameraFacing((CAMERA_FACING.equals(CameraHelper.CameraFacing.FRONT)?1:0))
+                        .build(),
+                overlay);
+    }
+
+    @Override
+    public void onAnalyze(FirebaseVisionImage image, int rotation, int width, int height) {
+        frames.detectInVisionImage(
+                null,
+                image,
+                new FrameMetadata.Builder()
+                        .setWidth(width)
+                        .setHeight(height)
+                        .setRotation(rotation)
+                        .setCameraFacing((CAMERA_FACING.equals(CameraHelper.CameraFacing.FRONT)?1:0))
+                        .build(),
+                overlay);
     }
 }

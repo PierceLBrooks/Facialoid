@@ -15,6 +15,10 @@
 package com.google.mediapipe.components;
 
 import android.app.Activity;
+
+import androidx.camera.core.ImageAnalysis;
+import androidx.camera.core.ImageAnalysisConfig;
+import androidx.camera.core.ImageProxy;
 import androidx.lifecycle.LifecycleOwner;
 import android.content.Context;
 import android.graphics.SurfaceTexture;
@@ -23,12 +27,17 @@ import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CameraMetadata;
 import android.hardware.camera2.params.StreamConfigurationMap;
+import android.media.Image;
 import android.util.Log;
 import android.util.Size;
 import androidx.camera.core.CameraX;
 import androidx.camera.core.CameraX.LensFacing;
 import androidx.camera.core.Preview;
 import androidx.camera.core.PreviewConfig;
+
+import com.google.firebase.ml.vision.common.FirebaseVisionImage;
+import com.google.firebase.ml.vision.common.FirebaseVisionImageMetadata;
+
 import java.util.Arrays;
 import java.util.List;
 
@@ -37,13 +46,14 @@ import java.util.List;
  *
  * <p>{@link CameraX} connects to the camera and provides video frames.
  */
-public class CameraXPreviewHelper extends CameraHelper {
+public class CameraXPreviewHelper extends CameraHelper implements ImageAnalysis.Analyzer {
   private static final String TAG = "CameraXPreviewHelper";
 
   // Target frame and view resolution size in landscape.
   private static final Size TARGET_SIZE = new Size(1280, 720);
 
   private Preview preview;
+  private ImageAnalysis analyzer;
 
   // Size of the camera-preview frames from the camera.
   private Size frameSize;
@@ -53,6 +63,12 @@ public class CameraXPreviewHelper extends CameraHelper {
   // Focal length resolved in pixels on the frame texture.
   private float focalLengthPixels;
   private CameraCharacteristics cameraCharacteristics = null;
+
+  private CameraXPreviewHelperListener listener;
+
+  public CameraXPreviewHelper(CameraXPreviewHelperListener listener) {
+    this.listener = listener;
+  }
 
   @Override
   @SuppressWarnings("RestrictTo") // See b/132705545.
@@ -87,7 +103,11 @@ public class CameraXPreviewHelper extends CameraHelper {
             onCameraStartedListener.onCameraStarted(previewOutput.getSurfaceTexture());
           }
         });
-    CameraX.bindToLifecycle(/*lifecycleOwner=*/ (LifecycleOwner) context, preview);
+
+    analyzer = new ImageAnalysis((new ImageAnalysisConfig.Builder()).setLensFacing(cameraLensFacing).setTargetResolution(TARGET_SIZE).build());
+    analyzer.setAnalyzer(this);
+
+    CameraX.bindToLifecycle(/*lifecycleOwner=*/ (LifecycleOwner) context, analyzer, preview);
 
   }
 
@@ -179,4 +199,34 @@ public class CameraXPreviewHelper extends CameraHelper {
       Log.e(TAG, "Accessing camera ID info got error: " + e);
     }
   }
+
+  @Override
+  public void analyze(ImageProxy imageProxy, int degrees) {
+    if (imageProxy == null || imageProxy.getImage() == null) {
+      return;
+    }
+    Image mediaImage = imageProxy.getImage();
+    int rotation = degreesToFirebaseRotation(degrees);
+    FirebaseVisionImage image = FirebaseVisionImage.fromMediaImage(mediaImage, rotation);
+    if (listener != null) {
+      listener.onAnalyze(image, rotation, mediaImage.getWidth(), mediaImage.getHeight());
+    }
+  }
+
+  private int degreesToFirebaseRotation(int degrees) {
+    switch (degrees) {
+      case 0:
+        return FirebaseVisionImageMetadata.ROTATION_0;
+      case 90:
+        return FirebaseVisionImageMetadata.ROTATION_90;
+      case 180:
+        return FirebaseVisionImageMetadata.ROTATION_180;
+      case 270:
+        return FirebaseVisionImageMetadata.ROTATION_270;
+      default:
+        throw new IllegalArgumentException(
+                "Rotation must be 0, 90, 180, or 270.");
+    }
+  }
+
 }

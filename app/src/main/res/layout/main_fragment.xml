@@ -28,21 +28,19 @@
                 android:layout_height="match_parent"
                 android:background="@android:color/black">
 
-                <com.piercelbrooks.mlkit.common.CameraSourcePreview
-                    android:id="@+id/firePreview"
+                <FrameLayout
+                    android:id="@+id/preview_display_layout"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="center">
+                    android:layout_height="match_parent">
 
-                    <com.piercelbrooks.mlkit.common.GraphicOverlay
-                        android:id="@+id/fireFaceOverlay"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_gravity="center">
+                    <TextView
+                        android:id="@+id/no_camera_access_view"
+                        android:layout_height="match_parent"
+                        android:layout_width="match_parent"
+                        android:gravity="center"
+                        android:text="@string/no_camera_access" />
 
-                    </com.piercelbrooks.mlkit.common.GraphicOverlay>
-
-                </com.piercelbrooks.mlkit.common.CameraSourcePreview>
+                </FrameLayout>
 
             </FrameLayout>
 
@@ -71,7 +69,7 @@
                 android:textSize="20sp"
                 android:textStyle="bold" />
 
-            <FrameLayout
+            <!--<FrameLayout
                 android:id="@+id/control"
                 android:layout_width="match_parent"
                 android:layout_height="60dp"
@@ -93,7 +91,7 @@
                     android:textOn=""
                     android:checked="false" />
 
-            </FrameLayout>
+            </FrameLayout>-->
 
         </LinearLayout>
 

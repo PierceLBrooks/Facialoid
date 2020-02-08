@@ -56,21 +56,23 @@ public class FaceContourDetectorProcessor extends VisionProcessorBase<List<Fireb
 
     @Override
     protected void onSuccess(
-            @Nullable Bitmap originalCameraImage,
-            @NonNull List<FirebaseVisionFace> faces,
-            @NonNull FrameMetadata frameMetadata,
-            @NonNull GraphicOverlay graphicOverlay) {
-        graphicOverlay.clear();
-        /*if (originalCameraImage != null) {
-            CameraImageGraphic imageGraphic = new CameraImageGraphic(graphicOverlay, originalCameraImage);
-            graphicOverlay.add(imageGraphic);
-        }*/
-        for (int i = 0; i < faces.size(); ++i) {
-            FirebaseVisionFace face = faces.get(i);
-            FaceContourGraphic faceGraphic = new FaceContourGraphic(graphicOverlay, face);
-            graphicOverlay.add(faceGraphic);
+            Bitmap originalCameraImage,
+            List<FirebaseVisionFace> faces,
+            FrameMetadata frameMetadata,
+            GraphicOverlay graphicOverlay) {
+        if (graphicOverlay != null) {
+            graphicOverlay.clear();
+            /*if (originalCameraImage != null) {
+                CameraImageGraphic imageGraphic = new CameraImageGraphic(graphicOverlay, originalCameraImage);
+                graphicOverlay.add(imageGraphic);
+            }*/
+            for (int i = 0; i < faces.size(); ++i) {
+                FirebaseVisionFace face = faces.get(i);
+                FaceContourGraphic faceGraphic = new FaceContourGraphic(graphicOverlay, face);
+                graphicOverlay.add(faceGraphic);
+            }
+            //graphicOverlay.postInvalidate();
         }
-        graphicOverlay.postInvalidate();
         if (listener != null) {
             listener.onFrame(originalCameraImage, faces, frameMetadata, graphicOverlay);
         }

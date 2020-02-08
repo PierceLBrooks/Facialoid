@@ -14,6 +14,7 @@
 package com.piercelbrooks.mlkit;
 
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 
 import androidx.annotation.GuardedBy;
 import androidx.annotation.NonNull;
@@ -105,7 +106,7 @@ public abstract class VisionProcessorBase<T> implements VisionImageProcessor {
                 graphicOverlay);
     }
 
-    private void detectInVisionImage(
+    public void detectInVisionImage(
             final Bitmap originalCameraImage,
             FirebaseVisionImage image,
             final FrameMetadata metadata,
@@ -143,10 +144,10 @@ public abstract class VisionProcessorBase<T> implements VisionImageProcessor {
      *                            image.
      */
     protected abstract void onSuccess(
-            @Nullable Bitmap originalCameraImage,
-            @NonNull T results,
-            @NonNull FrameMetadata frameMetadata,
-            @NonNull GraphicOverlay graphicOverlay);
+            Bitmap originalCameraImage,
+            T results,
+            FrameMetadata frameMetadata,
+            GraphicOverlay graphicOverlay);
 
     protected abstract void onFailure(@NonNull Exception e);
 }

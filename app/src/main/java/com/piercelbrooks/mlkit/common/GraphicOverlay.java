@@ -42,7 +42,9 @@ import java.util.List;
  *       coordinate from the preview's coordinate system to the view coordinate system.
  * </ol>
  */
-public class GraphicOverlay extends View {
+public class GraphicOverlay /*extends View*/ {
+  private int width;
+  private int height;
   private final Object lock = new Object();
   private int previewWidth;
   private float widthScaleFactor = 1.0f;
@@ -92,7 +94,8 @@ public class GraphicOverlay extends View {
 
     /** Returns the application context of the app. */
     public Context getApplicationContext() {
-      return overlay.getContext().getApplicationContext();
+      return null;
+      //return overlay.getContext().getApplicationContext();
     }
 
     /**
@@ -100,7 +103,7 @@ public class GraphicOverlay extends View {
      */
     public float translateX(float x) {
       if (overlay.facing == CameraSource.CAMERA_FACING_FRONT) {
-        return overlay.getWidth() - scaleX(x);
+        return overlay.width - scaleX(x);
       } else {
         return scaleX(x);
       }
@@ -114,12 +117,20 @@ public class GraphicOverlay extends View {
     }
 
     public void postInvalidate() {
-      overlay.postInvalidate();
+      //overlay.postInvalidate();
     }
   }
 
+  public GraphicOverlay(int width, int height) {
+    this.width = width;
+    this.height = height;
+  }
+
   public GraphicOverlay(Context context, AttributeSet attrs) {
-    super(context, attrs);
+    /*super(context, attrs);
+    width = getWidth();
+    height = getHeight();
+     */
   }
 
   /** Removes all graphics from the overlay. */
@@ -127,7 +138,7 @@ public class GraphicOverlay extends View {
     synchronized (lock) {
       graphics.clear();
     }
-    postInvalidate();
+    //postInvalidate();
   }
 
   /** Adds a graphic to the overlay. */
@@ -142,7 +153,7 @@ public class GraphicOverlay extends View {
     synchronized (lock) {
       graphics.remove(graphic);
     }
-    postInvalidate();
+    //postInvalidate();
   }
 
   /**
@@ -155,18 +166,17 @@ public class GraphicOverlay extends View {
       this.previewHeight = previewHeight;
       this.facing = facing;
     }
-    postInvalidate();
+    //postInvalidate();
   }
 
   /** Draws the overlay with its associated graphic objects. */
-  @Override
-  protected void onDraw(Canvas canvas) {
-    super.onDraw(canvas);
+  public void onDraw(Canvas canvas) {
+    //super.onDraw(canvas);
 
     synchronized (lock) {
       if ((previewWidth != 0) && (previewHeight != 0)) {
-        widthScaleFactor = (float) getWidth() / previewWidth;
-        heightScaleFactor = (float) getHeight() / previewHeight;
+        widthScaleFactor = (float) width / previewWidth;
+        heightScaleFactor = (float) height / previewHeight;
       }
 
       for (Graphic graphic : graphics) {

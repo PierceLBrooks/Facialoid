@@ -13,6 +13,7 @@ import androidx.annotation.LayoutRes;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
+import com.google.mediapipe.framework.AndroidAssetUtil;
 import com.google.mediapipe.glutil.EglManager;
 import com.piercelbrooks.common.BasicActivity;
 import com.piercelbrooks.common.Mayor;
@@ -32,6 +33,7 @@ public class MainActivity extends BasicActivity<MayoralFamily> {
     @Override
     protected void create() {
         manager = new EglManager(null);
+        AndroidAssetUtil.initializeNativeAssetManager(this);
     }
 
     @Override
@@ -132,5 +134,9 @@ public class MainActivity extends BasicActivity<MayoralFamily> {
         }
 
         return super.onOptionsItemSelected(item);
+    }
+
+    public EglManager getManager() {
+        return manager;
     }
 }

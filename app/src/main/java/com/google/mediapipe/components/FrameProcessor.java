@@ -29,6 +29,7 @@ import com.google.mediapipe.framework.PacketGetter;
 import com.google.mediapipe.framework.SurfaceOutput;
 import com.google.mediapipe.framework.TextureFrame;
 import java.io.File;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -229,6 +230,11 @@ public class FrameProcessor implements TextureFrameProcessor {
       startGraph();
     }
     return true;
+  }
+
+  @Override
+  public void onNewBitmap(ByteBuffer bitmap, int width, int height) {
+
   }
 
   @Override

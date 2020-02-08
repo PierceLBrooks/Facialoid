@@ -93,7 +93,7 @@ public class FaceDetectionProcessor extends VisionProcessorBase<List<FirebaseVis
             FaceGraphic faceGraphic = new FaceGraphic(graphicOverlay, face, cameraFacing, overlayBitmap);
             graphicOverlay.add(faceGraphic);
         }
-        graphicOverlay.postInvalidate();
+        //graphicOverlay.postInvalidate();
     }
 
     @Override

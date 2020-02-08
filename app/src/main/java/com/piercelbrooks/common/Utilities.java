@@ -4,6 +4,8 @@ import android.app.Activity;
 import android.content.Context;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+
+import android.util.Base64;
 import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
@@ -17,6 +19,7 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.security.MessageDigest;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -418,5 +421,20 @@ public abstract class Utilities {
             entries.add(new AbstractMap.SimpleEntry<Object, Object>(name, properties.getProperty(name)));
         }
         return entries;
+    }
+
+    public static String getHash(byte[] hash) {
+        byte[] bytes = null;
+        try {
+            MessageDigest digest = java.security.MessageDigest.getInstance("MD5");
+            digest.update(hash);
+            bytes = digest.digest();
+        } catch (Exception exception) {
+            exception.printStackTrace();
+        }
+        if (bytes != null) {
+            return Base64.encodeToString(bytes, 0, bytes.length, 0);
+        }
+        return "";
     }
 }

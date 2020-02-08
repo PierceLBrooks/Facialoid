@@ -3,11 +3,14 @@ package com.piercelbrooks.mlkit.facedetection;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.util.Log;
 
 import com.google.firebase.ml.vision.face.FirebaseVisionFaceContour;
 import com.piercelbrooks.mlkit.common.GraphicOverlay;
 
 public class FaceContourCenterGraphic extends GraphicOverlay.Graphic {
+    private static final String TAG = "FCCG";
+
     private float x;
     private float y;
     private float radius;

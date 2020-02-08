@@ -16,8 +16,11 @@ package com.google.mediapipe.components;
 
 import com.google.mediapipe.framework.TextureFrame;
 
+import java.nio.ByteBuffer;
+
 /** Lightweight abstraction for an object that can receive video frames. */
 public interface TextureFrameConsumer {
   /** Called when a new {@link TextureFrame} is available. */
   public abstract void onNewFrame(TextureFrame frame);
+  public abstract void onNewBitmap(ByteBuffer bitmap, int width, int height);
 }

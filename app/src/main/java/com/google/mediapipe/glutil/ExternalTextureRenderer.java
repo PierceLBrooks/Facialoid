@@ -17,8 +17,13 @@ package com.google.mediapipe.glutil;
 import android.graphics.SurfaceTexture;
 import android.opengl.GLES11Ext;
 import android.opengl.GLES20;
+
+import com.google.mediapipe.components.TextureFrameConsumer;
+
+import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -72,7 +77,7 @@ public class ExternalTextureRenderer {
 
   /**
    * Flips rendering output vertically, useful for conversion between coordinate systems with
-   * top-left v.s. bottom-left origins. Effective in subsequent {@link #render(SurfaceTexture)}
+   * top-left v.s. bottom-left origins. Effective in subsequent {@link #render(SurfaceTexture, List<TextureFrameConsumer>, int, int)}
    * calls.
    */
   public void setFlipY(boolean flip) {
@@ -86,7 +91,7 @@ public class ExternalTextureRenderer {
    *
    * <p>NOTE: Calls {@link SurfaceTexture#updateTexImage()} on passed surface texture.
    */
-  public void render(SurfaceTexture surfaceTexture) {
+  public void render(SurfaceTexture surfaceTexture, List<TextureFrameConsumer> consumers, int width, int height) {
     GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
 
     GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
@@ -130,6 +135,14 @@ public class ExternalTextureRenderer {
 
     // TODO: add sync and go back to glFlush()
     GLES20.glFinish();
+
+    /*if (consumers != null) {
+      ByteBuffer bytes = ByteBuffer.allocate(width*height*4);
+      GLES20.glReadPixels(0, 0, width, height, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, bytes);
+      for (TextureFrameConsumer consumer : consumers) {
+        consumer.onNewBitmap(bytes, width, height);
+      }
+    }*/
   }
 
   /**

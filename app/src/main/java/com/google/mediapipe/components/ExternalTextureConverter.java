@@ -184,7 +184,11 @@ public class ExternalTextureConverter implements TextureFrameProducer {
       setSurfaceTexture(texture, width, height);
       int[] textures = new int[1];
       GLES20.glGenTextures(1, textures, 0);
-      surfaceTexture.attachToGLContext(textures[0]);
+      try {
+        surfaceTexture.attachToGLContext(textures[0]);
+      } catch (Exception exception) {
+        exception.printStackTrace();
+      }
     }
 
     public void setConsumer(TextureFrameConsumer consumer) {
@@ -240,13 +244,13 @@ public class ExternalTextureConverter implements TextureFrameProducer {
       try {
         synchronized (consumers) {
           boolean frameUpdated = false;
+          AppTextureFrame outputFrame = nextOutputFrame();
+          // TODO: Switch to ref-counted single copy instead of making additional
+          // copies blitting to separate textures each time.
+          updateOutputFrame(outputFrame);
+          frameUpdated = true;
+          outputFrame.setInUse();
           for (TextureFrameConsumer consumer : consumers) {
-            AppTextureFrame outputFrame = nextOutputFrame();
-            // TODO: Switch to ref-counted single copy instead of making additional
-            // copies blitting to separate textures each time.
-            updateOutputFrame(outputFrame);
-            frameUpdated = true;
-
             if (consumer != null) {
               if (Log.isLoggable(TAG, Log.VERBOSE)) {
                 Log.v(
@@ -257,12 +261,11 @@ public class ExternalTextureConverter implements TextureFrameProducer {
                         outputFrame.getWidth(),
                         outputFrame.getHeight()));
               }
-              outputFrame.setInUse();
               consumer.onNewFrame(outputFrame);
             }
           }
           if (!frameUpdated) {  // Need to update the frame even if there are no consumers.
-            AppTextureFrame outputFrame = nextOutputFrame();
+            outputFrame = nextOutputFrame();
             // TODO: Switch to ref-counted single copy instead of making additional
             // copies blitting to separate textures each time.
             updateOutputFrame(outputFrame);
@@ -330,7 +333,7 @@ public class ExternalTextureConverter implements TextureFrameProducer {
     private void updateOutputFrame(AppTextureFrame outputFrame) {
       // Copy surface texture's pixels to output frame
       bindFramebuffer(outputFrame.getTextureName(), destinationWidth, destinationHeight);
-      renderer.render(surfaceTexture);
+      renderer.render(surfaceTexture, consumers, destinationWidth, destinationHeight);
 
       // Populate frame timestamp with surface texture timestamp after render() as renderer
       // ensures that surface texture has the up-to-date timestamp. (Also adjust |timestampOffset|

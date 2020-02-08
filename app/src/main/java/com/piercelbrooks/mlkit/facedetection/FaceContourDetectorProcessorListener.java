@@ -8,13 +8,10 @@ import com.piercelbrooks.mlkit.common.GraphicOverlay;
 
 import java.util.List;
 
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-
 public interface FaceContourDetectorProcessorListener {
     public void onFrame(
-            @Nullable Bitmap originalCameraImage,
-            @NonNull List<FirebaseVisionFace> faces,
-            @NonNull FrameMetadata frameMetadata,
-            @NonNull GraphicOverlay graphicOverlay);
+            Bitmap originalCameraImage,
+            List<FirebaseVisionFace> faces,
+            FrameMetadata frameMetadata,
+            GraphicOverlay graphicOverlay);
 }

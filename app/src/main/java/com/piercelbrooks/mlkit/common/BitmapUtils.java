@@ -19,26 +19,16 @@ public class BitmapUtils {
     // Convert NV21 format byte buffer to bitmap.
     @Nullable
     public static Bitmap getBitmap(ByteBuffer data, FrameMetadata metadata) {
-        data.rewind();
-        byte[] imageInBuffer = new byte[data.limit()];
-        data.get(imageInBuffer, 0, imageInBuffer.length);
-        try {
-            YuvImage image =
-                    new YuvImage(
-                            imageInBuffer, ImageFormat.NV21, metadata.getWidth(), metadata.getHeight(), null);
-            if (image != null) {
-                ByteArrayOutputStream stream = new ByteArrayOutputStream();
-                image.compressToJpeg(new Rect(0, 0, metadata.getWidth(), metadata.getHeight()), 80, stream);
-
-                Bitmap bmp = BitmapFactory.decodeByteArray(stream.toByteArray(), 0, stream.size());
-
-                stream.close();
-                return rotateBitmap(bmp, metadata.getRotation(), metadata.getCameraFacing());
-            }
-        } catch (Exception e) {
-            Log.e("VisionProcessorBase", "Error: " + e.getMessage());
+        byte[] bytes = data.array();
+        if (bytes.length < 4) {
+            return null;
         }
-        return null;
+        int alpha = 255;
+        int[] colors = new int[bytes.length/4];
+        for (int i = 0; i < bytes.length - 3; i += 4) {
+            colors[i / 4] = (alpha << 24) | (bytes[i] << 16) | (bytes[i + 1] << 8) | bytes[i + 2];
+        }
+        return Bitmap.createBitmap(colors, metadata.getWidth(), metadata.getHeight(), Bitmap.Config.ARGB_8888);
     }
 
     // Rotates a bitmap if it is converted from a bytebuffer.
